@@ -42,7 +42,7 @@ class notion_api:
         response = requests.post(url, headers=self.headers, json=payload)
         return response.json()
     
-    def update_page(self, page_id: str, properties: dict):
+    def update_page_properties(self, page_id: str, properties: dict):
         url = f"{self.base_url}/pages/{page_id}"
         payload = {
             "properties": properties

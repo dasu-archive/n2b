@@ -3,11 +3,13 @@ from notion_to_md import NotionToMarkdown
 
 import os
 
+import pytz
+
 from database.mysql_conf import SessionLocal
 from database.models import Attributes, AttributesMapping, init_tables
 from notion.notion_api import notion_api
 from database.repository.attribute_repository import get_mappings_by_notion_id, get_attribute_by_notion_attribute_id
-
+from datetime import datetime
 
 class NotionBot:
     def __init__(self):
@@ -118,13 +120,16 @@ class NotionBot:
             
             
     def update_publication_date(self, page_id: str):
-        from datetime import datetime
+        
+        kst = pytz.timezone("Asia/Seoul")
+        now_kst = datetime.now(kst)
+
         self.notion_api.update_page_properties(
             page_id,
             {
                 "발행날짜": {
                     "date": {
-                        "start": datetime.now().isoformat()
+                        "start": now_kst.isoformat()
                     }
                 }
             }
