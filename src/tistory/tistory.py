@@ -11,6 +11,7 @@ class TistoryBot:
         self.blog_name = os.getenv("TISTORY_BLOG_NAME")
 
 
+        
     def update_category(self, modify_request_dto):
         url = f"{self.base_url}/manage/category.json"
         params = {
