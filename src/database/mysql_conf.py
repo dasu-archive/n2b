@@ -1,62 +1,26 @@
-import mysql.connector
-from mysql.connector import Error
-import 
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import declarative_base
+from dotenv import load_dotenv
 
-class MySQLDatabase:
-    def __init__(self, host=None, user=None, password=None, database=None):
-        # 직접 입력 없으면 env 값 사용
-        self.host = host or os.getenv("MYSQL_HOST", "localhost")
-        self.user = user or os.getenv("MYSQL_USER", "root")
-        self.password = password or os.getenv("MYSQL_PASSWORD", "")
-        self.database = database or os.getenv("MYSQL_DATABASE", "")
+load_dotenv()
+Base = declarative_base() 
 
-    def connect(self):
-        try:
-            self.connection = mysql.connector.connect(
-                host=self.host,
-                database=self.database,
-                user=self.user,
-                password=self.password
-            )
-            if self.connection.is_connected():
-                print("Successfully connected to the database")
-        except Error as e:
-            print(f"Error while connecting to MySQL: {e}")
+MYSQL_HOST = os.getenv("DATABASE_HOST", "localhost")
+MYSQL_DATABASE_NAME = os.getenv("DATABASE_NAME", "n2b")
+MYSQL_USER = os.getenv("DATABASE_USER", "root")
+MYSQL_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
 
-    def disconnect(self):
-        if self.connection and self.connection.is_connected():
-            self.connection.close()
-            print("MySQL connection is closed")
+DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DATABASE_NAME}?charset=utf8mb4"
 
-    def execute(self, query, params=None, commit=False):
-        """쿼리 실행"""
-        self.connect()
-        cursor = self.conn.cursor(dictionary=True)
-        try:
-            cursor.execute(query, params or ())
-            if commit:
-                self.conn.commit()
-            return cursor
-        except Error as e:
-            print(f"❌ 쿼리 실행 오류: {e}")
-            raise e
+# SQLAlchemy Engine
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,       # True면 SQL 로그 출력
+    pool_size=5,
+    max_overflow=10
+)
 
-    def fetchall(self, query, params=None):
-        """조회용"""
-        cursor = self.execute(query, params)
-        result = cursor.fetchall()
-        cursor.close()
-        return result
-
-    def fetchone(self, query, params=None):
-        """한 행 조회"""
-        cursor = self.execute(query, params)
-        result = cursor.fetchone()
-        cursor.close()
-        return result
-
-    def close(self):
-        """DB 연결 종료"""
-        if self.conn:
-            self.conn.close()
-            self.conn = None
+# Session Factory
+SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
