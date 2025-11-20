@@ -1,9 +1,9 @@
 
-from notion.notion import NotionBot
+from n2b.notion.notion import NotionBot
 from dotenv import load_dotenv
 import json
 
-from tistory.tistory import TistoryBot
+from n2b.tistory.tistory import TistoryBot
 load_dotenv()
 
 if __name__ == "__main__":

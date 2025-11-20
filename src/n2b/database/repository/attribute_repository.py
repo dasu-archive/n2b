@@ -1,6 +1,6 @@
 # repositories/attribute_repository.py
 from sqlalchemy.orm import Session, aliased
-from database.models import Attributes, AttributesMapping
+from n2b.database.models import Attributes, AttributesMapping
 
 def get_mappings_by_notion_id(session: Session, category_id: str, group_id) -> AttributesMapping:
     CategoryAttr = aliased(Attributes)

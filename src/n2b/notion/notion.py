@@ -2,14 +2,14 @@ from notion_client import Client
 from notion_to_md import NotionToMarkdown
 
 import os
-
+from datetime import datetime
 import pytz
 
-from database.mysql_conf import SessionLocal
-from database.models import Attributes, AttributesMapping, init_tables
-from notion.notion_api import notion_api
-from database.repository.attribute_repository import get_mappings_by_notion_id, get_attribute_by_notion_attribute_id
-from datetime import datetime
+from n2b.database.mysql_conf import SessionLocal
+from n2b.database.models import Attributes, AttributesMapping, init_tables
+from n2b.notion.notion_api import notion_api
+from n2b.database.repository.attribute_repository import get_mappings_by_notion_id, get_attribute_by_notion_attribute_id
+
 
 class NotionBot:
     def __init__(self):

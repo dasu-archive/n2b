@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
-from database.mysql_conf import engine
+from n2b.database.mysql_conf import engine
 
 Base = declarative_base()
 
