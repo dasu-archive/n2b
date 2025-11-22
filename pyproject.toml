@@ -17,7 +17,8 @@ dependencies = [
     "alembic (>=1.17.2,<2.0.0)",
     "pymysql (>=1.1.2,<2.0.0)",
     "python-dotenv (>=1.2.1,<2.0.0)",
-    "notion-to-md-py (>=0.1.4,<0.2.0)"
+    "notion-to-md-py (>=0.1.4,<0.2.0)",
+    "playwright (>=1.56.0,<2.0.0)"
 ]
 
 [tool.poetry]
