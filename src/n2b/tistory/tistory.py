@@ -1,7 +1,10 @@
+import json
 import requests
 import os
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
+
+from n2b.database.models import AttributesMapping
 
 load_dotenv()
 
@@ -60,7 +63,7 @@ class TistoryBot:
             # 3-3. 로그인 버튼 클릭
             page.click('xpath=//*[@id="mainContent"]/div/div/form/div[4]/button[1]')
             page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(100000)
+            page.wait_for_timeout(1000)
             
             # 4. 2단 인증 처리가 필요할 시, 이메일 인증 입력 사용자한테 받게 하기
             # TODO 조건문 True 없애기. 
@@ -85,7 +88,7 @@ class TistoryBot:
             #     page.wait_for_load_state("networkidle")
             #     page.wait_for_timeout(4000)
             #     print("2단계 인증 완료")
-            
+            self.cookies = self._get_cookies()
             print("로그인 완료")
         else:
             print("이미 로그인되어 있음")
@@ -93,11 +96,67 @@ class TistoryBot:
         
     def _get_cookies(self): 
         return  self.page.context.cookies()
-        
+    
+    def _get_cookie_headers_for_requests(self):
+        return ["__gads","__eoi", "IS_TC","TSSESSION","__T_","__T_SECURE","TSMT","_T_ANO"]
+    
+    def _get_cookies_for_requests(self):
+        cookies = self.cookies
+        filtered_cookie_headers = self._get_cookie_headers_for_requests()
+        cookie_str = "; ".join([f"{cookie['name']}={cookie['value']}" for cookie in cookies if cookie['name'] in filtered_cookie_headers])
+        return cookie_str    
+     
     def _is_kakako_login_page(self):
         return self.page.locator("text=카카오계정 로그인").is_visible()
         
-    def update_category_mappings(self, modify_request_dto):
-        url = f"{self.base_url}/manage/category.json"
+    def upload_post(self, title, content, category_id=None, tag=None):
+        url = f"{self.base_url}/manage/post.json"
+
+        cookies = self._get_cookies_for_requests()
         headers = {
-            "Authorization":
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Referer": f"{self.base_url}/manage/newpost",
+            "Origin": f"{self.base_url}",
+            "Content-Type": "application/json",
+            "Cookie": cookies
+        }
+        data = {"id":"0",
+            "title": title, # String 
+            "content": content, # String "<p>32432324</p>\n<h2>2323211</h2>\n
+            "slogan":title,
+            "visibility":20,
+            "category": category_id, # integer
+            "tag": " ".join(tag), # String  "111 222 333"
+            "published":1,
+            "password":"test1234",
+            "uselessMarginForEntry":1,
+            "daumLike":"401",
+            "cclCommercial":0,
+            "cclDerive":0,
+            "type":"post",
+            "attachments":[],
+            "recaptchaValue":"",
+            "draftSequence":None
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        print("Tistory Post Upload Response:", response.status_code, response.text)
+    
+    
+    # 카테고리를 넣은후 -> 받은 카테고리 번호를 가져와 -> 내꺼 db에 업데이트 시키기
+    def update_category(self, attribute_mapping:AttributesMapping):
+        if attribute_mapping.tistory_id is None or attribute_mapping.tistory_id == 0:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Accept-Encoding": "gzip, deflate, br, zstd",
+                "Referer": f"{self.base_url}/manage/category",
+                "Origin": f"{self.base_url}",
+                "Content-Type": "application/json",
+                "Cookie": self._get_cookies_for_requests()
+            }
+            

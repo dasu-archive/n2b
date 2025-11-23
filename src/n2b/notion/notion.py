@@ -1,16 +1,19 @@
+import re
 from notion_client import Client
 from notion_to_md import NotionToMarkdown
 
+import base64
 import os
 from datetime import datetime
 import pytz
+import requests
 
 from n2b.database.mysql_conf import SessionLocal
 from n2b.database.models import Attributes, AttributesMapping, init_tables
 from n2b.notion.notion_api import notion_api
 from n2b.database.repository.attribute_repository import get_mappings_by_notion_id, get_attribute_by_notion_attribute_id
 
-
+import markdown as md_lib
 class NotionBot:
     def __init__(self):
         self.n2m = NotionToMarkdown(Client(auth=os.getenv("NOTION_API_KEY")))
@@ -90,10 +93,54 @@ class NotionBot:
         return self.notion_api.get_pages(filter=filter)
     
 
+    # Notion 페이지를 HTML로 변환
+    def get_page_to_html(self, page_id):
+        notion_markdown = self.get_page_to_markdown(page_id=page_id)
 
-    # Notion 페이지를 마크다운으로 변환
+        html = md_lib.markdown(notion_markdown, extensions=['fenced_code', 'tables'])
+        return html
+
+    # Notion 페이지를 Markdown으로 변환
     def get_page_to_markdown(self, page_id: str):
-        return self.n2m.to_markdown_string(self.n2m.page_to_markdown(page_id)).get("parent")
+        notion_to_markdown = self.n2m.to_markdown_string(
+            self.n2m.page_to_markdown(page_id)
+        ).get("parent")
+        converted_markdown = self._convert_img_url_to_base64_in_markdown(notion_to_markdown)
+        return converted_markdown
+
+    # Markdown의 이미지 URL을 Base64로 변환
+    def _convert_img_url_to_base64_in_markdown(self, markdown_text: str):
+        # 이미지 마크다운 패턴: ![Alt](URL)
+        pattern = r'!\[(.*?)\]\((https?://[^\s]+)\)'
+        
+        def replace_img(match):
+            alt_text = match.group(1)
+            url = match.group(2)
+            try:
+                # 이미지 다운로드
+                response = requests.get(url)
+                response.raise_for_status()
+                img_data = response.content
+                # Base64 인코딩
+                b64_str = base64.b64encode(img_data).decode('utf-8')
+                # MIME 타입 추정
+                if url.lower().endswith(".png"):
+                    mime = "image/png"
+                elif url.lower().endswith(".jpg") or url.lower().endswith(".jpeg"):
+                    mime = "image/jpeg"
+                elif url.lower().endswith(".gif"):
+                    mime = "image/gif"
+                else:
+                    mime = "application/octet-stream"
+                # Base64 img 태그로 변환
+                return f'![{alt_text}](data:{mime};base64,{b64_str})'
+            except Exception as e:
+                print(f"[Warning] Failed to convert image {url}: {e}")
+                return match.group(0)  # 실패 시 원래 Markdown 유지
+
+        # 모든 이미지 변환
+        converted = re.sub(pattern, replace_img, markdown_text)
+        return converted
     
     def save_markdown_to_file(self, page_id: str, filename: str):
         """마크다운 문자열을 파일로 저장"""
@@ -117,10 +164,9 @@ class NotionBot:
             print(f"❌ 파일 저장 중 오류 발생: {e}")
             
             
-            
+    
             
     def update_publication_date(self, page_id: str):
-        
         kst = pytz.timezone("Asia/Seoul")
         now_kst = datetime.now(kst)
 
@@ -192,8 +238,6 @@ class NotionBot:
 
     # 속성 매핑 업데이트
     # return: AttributesMapping
-
-    
     def update_attribute_mappings_by_id(self, category_id: str, group_id: str, tistory_id: int = 0)->AttributesMapping:
         attribute_mapping = get_mappings_by_notion_id(session=self.db, category_id=category_id, group_id=group_id)
         
