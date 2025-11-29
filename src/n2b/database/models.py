@@ -36,6 +36,7 @@ class AttributesMapping(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     category_id = Column(Integer, ForeignKey("attributes.id"))
     group_id = Column(Integer, ForeignKey("attributes.id"))
+    parent_id = Column(Integer, ForeignKey("attributes_mapping.id"))
     tistory_id = Column(Integer, default=0)
     # Attributes와 관계
     category = relationship(
@@ -48,7 +49,20 @@ class AttributesMapping(Base):
         foreign_keys=[group_id],
         back_populates="groups"
     )
+    
+    parent = relationship(
+        "AttributesMapping",
+        foreign_keys=[parent_id],
+        remote_side=[id],               # ★ 반드시 필요!
+        back_populates="children"       # children 필드 이름은 원하는 이름으로 변경 가능
+    )
 
+    # parent 아래 있는 children 컬렉션
+    children = relationship(
+        "AttributesMapping",
+        back_populates="parent",
+        cascade="all, delete-orphan"
+    )
 
 
 

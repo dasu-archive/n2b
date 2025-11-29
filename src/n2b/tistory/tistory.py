@@ -147,9 +147,13 @@ class TistoryBot:
     
     
     # 카테고리를 넣은후 -> 받은 카테고리 번호를 가져와 -> 내꺼 db에 업데이트 시키기
+    # AttributesMapping의 parent 부터 확인
     def update_category(self, attribute_mapping:AttributesMapping):
-        if attribute_mapping.tistory_id is None or attribute_mapping.tistory_id == 0:
-            headers = {
+        
+        # 카테고리 업로드 url 
+        url = f"{self.base_url}/manage/post.json"
+        # 공통 헤더 설정
+        headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -158,5 +162,77 @@ class TistoryBot:
                 "Origin": f"{self.base_url}",
                 "Content-Type": "application/json",
                 "Cookie": self._get_cookies_for_requests()
+        }
+        
+        parent_mapping = attribute_mapping.parent
+        
+        if parent_mapping.tistory_id is None or parent_mapping.tistory_id == 0:
+            data = self._create_tistoy_category_body(parent_mapping)
+            response = requests.put(url, headers=headers, json=data)
+            print("[create] Tistory Category", response.status_code)
+        if attribute_mapping.tistory_id is None or attribute_mapping.tistory_id == 0:
+            data = self._create_tistoy_category_body(attribute_mapping)
+            response = requests.put(url, headers=headers, json=data)
+            print("[create] Tistory Category", response.status_code)
+            
+            
+    # 카테고리 체크 항목
+    # 1. priority ( 순서 명확해야 함 )
+    # 2. parent 
+    # 3. depth
+    # 4. Category Lable
+    def _create_tistoy_category_body(self, attribute_mapping:AttributesMapping):
+        # depth : parentID 가 있으면 1, 아니면 2 
+        depth = ( attribute_mapping.parent_id != None or attribute_mapping.parent_id == 0 )  1 : 2 
+        
+        # priority : parentId 의 개수
+        priority = 0
+        # parent : parent의 tistory id 
+        parent = attribute_mapping.parent.tistory_id
+        
+        # categoryLabel : [Category]/[Group]
+        categoryLabel = 
+        data = {
+                {
+                    "rootLabel": "분류 전체보기",
+                    "delete": [],
+                    "append": [
+                        {
+                            "id": -1,
+                            "name": "7777",
+                            "children": [],
+                            "depth": depth,
+                            "opened": True,
+                            "priority": priority,
+                            "visibility": 20,
+                            "parent": parent, # 없을 시 0
+                            "viewChannel": "401", # IT,인터넷 고정
+                            "entries": 0,
+                            "categoryInfo": {},
+                            "isNew": True,
+                            "updatedData": True,
+                            "label": CategoryLabel # [Category]/[Group] 형식 
+                        }
+                    ],
+                    "update": [
+                        {
+                            "id": -1,
+                            "name": "7777",
+                            "children": [],
+                            "depth": 2,
+                            "opened": true,
+                            "priority": 1,
+                            "visibility": 20,
+                            "parent": 1209472,
+                            "viewChannel": null,
+                            "entries": 0,
+                            "categoryInfo": {},
+                            "isNew": true,
+                            "updatedData": true,
+                            "label": "카테고리 5/7777"
+                        }
+                    ]
+                }
             }
             
+                
