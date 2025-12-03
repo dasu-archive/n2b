@@ -1,5 +1,6 @@
+from typing import List, Optional
 from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, ForeignKey
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from n2b.database.mysql_conf import engine
 
 Base = declarative_base()
@@ -38,27 +39,29 @@ class AttributesMapping(Base):
     group_id = Column(Integer, ForeignKey("attributes.id"))
     parent_id = Column(Integer, ForeignKey("attributes_mapping.id"))
     tistory_id = Column(Integer, default=0)
+    
     # Attributes와 관계
-    category = relationship(
+    category: Mapped["Attributes"]= relationship(
         "Attributes",
         foreign_keys=[category_id],
         back_populates="categories"
     )
-    group = relationship(
+    
+    group: Mapped["Attributes"] = relationship(
         "Attributes",
         foreign_keys=[group_id],
         back_populates="groups"
     )
     
-    parent = relationship(
+    parent:  Mapped[Optional["AttributesMapping"]] = relationship(
         "AttributesMapping",
         foreign_keys=[parent_id],
-        remote_side=[id],               # ★ 반드시 필요!
-        back_populates="children"       # children 필드 이름은 원하는 이름으로 변경 가능
+        remote_side=[id],               
+        back_populates="children"      
     )
 
     # parent 아래 있는 children 컬렉션
-    children = relationship(
+    children:  Mapped[List["AttributesMapping"]] = relationship(
         "AttributesMapping",
         back_populates="parent",
         cascade="all, delete-orphan"

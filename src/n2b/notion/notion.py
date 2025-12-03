@@ -1,3 +1,4 @@
+import json
 import re
 from notion_client import Client
 from notion_to_md import NotionToMarkdown
@@ -16,7 +17,9 @@ from n2b.database.repository.attribute_repository import get_mappings_by_notion_
 import markdown as md_lib
 class NotionBot:
     def __init__(self):
-        self.n2m = NotionToMarkdown(Client(auth=os.getenv("NOTION_API_KEY")))
+        self.client = Client(auth=os.getenv("NOTION_API_KEY"))
+        
+        self.n2m = NotionToMarkdown(self.client)
         self.notion_api = notion_api()
         init_tables()
         self.db = SessionLocal()
@@ -242,14 +245,16 @@ class NotionBot:
     def update_attribute_mappings_by_id(self, category_id: str, group_id: str, tistory_id: int = 0)->AttributesMapping:
         # 부모가 먼저 아이디가 존재하는지 확인 ( parent = none, gruop = 0)
         category_mapping = get_mappings_by_notion_id(session=self.db, category_id=category_id, parent_id=None)
+        category = get_attribute_by_notion_attribute_id(session=self.db, attribute_id=category_id, kind="Category")
+        group = get_attribute_by_notion_attribute_id(session=self.db, attribute_id=group_id, kind="Group")
         # 부모가 없다면 둘다 생성
         if not category_mapping:
-            category_mapping = AttributesMapping(category_id=category_id, tistory_id=0)
+            category_mapping = AttributesMapping(category_id=category.id, tistory_id=0)
             self.db.add(category_mapping)
             self.db.commit()
             self.db.refresh(category_mapping)
             
-            group_mapping = AttributesMapping(category_id=category_id, group_id=group_id, parent_id=category_mapping.id)
+            group_mapping = AttributesMapping(category_id=category.id, group_id=group.id, parent_id=category_mapping.id)
             self.db.add(group_mapping)
             self.db.commit()
             self.db.refresh(group_mapping)
@@ -257,11 +262,11 @@ class NotionBot:
             
         # 부모가 있다면 자식확인 후 생성
         else:
-            group_mapping = get_mappings_by_notion_id(session=self.db, category_id=category_id, parent_id=None)
+            group_mapping = get_mappings_by_notion_id(session=self.db, category_id=category_id, group_id=group_id, parent_id=category_mapping.id)
             
             # 자식이 없음. 생성하기
             if not group_mapping:
-                group_mapping = AttributesMapping(category_id=category_id, group_id=group_id, parent_id=category_mapping.id)
+                group_mapping = AttributesMapping(category_id=category.id, group_id=group.id, parent_id=category_mapping.id)
                 self.db.add(group_mapping)
                 self.db.commit()
                 self.db.refresh(group_mapping)
@@ -270,5 +275,6 @@ class NotionBot:
                 print("[exist] Category : " + category_id + " , Group " + group_id)
             
             
-            
+        
+        return group_mapping
         

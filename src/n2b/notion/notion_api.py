@@ -60,12 +60,11 @@ class notion_api:
     
     # data source 정보 가져오기, 속성값, 데이터베이스 이름 등.
     def get_notion_data_sources(self,  data_source_id = None):
-        data_source_id = data_source_id or os.getenv("NOTION_DATA_SOURCE_ID")
+        data_source_id = os.getenv("NOTION_DATA_SOURCE_ID")
         if data_source_id is None:
             raise ValueError("Data source ID must be provided either as an argument or through the NOTION_DATA_SOURCE_ID environment variable.")
         url = f"{self.base_url}/data_sources/{data_source_id}"
-
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url=url, headers=self.headers)
         return response.json()
 
     # 데이터베이스 정보 가져오기

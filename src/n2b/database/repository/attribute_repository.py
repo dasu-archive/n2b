@@ -11,7 +11,7 @@ def get_mappings_by_notion_id(session: Session, category_id: str, group_id: str 
         ]
 
     # Group 조건 추가
-    if group_id is None:
+    if group_id is not None:
         filters.append(GroupAttr.notion_attribute_id == group_id)
     # parent 조건추가
     if parent_id is None:
@@ -21,21 +21,29 @@ def get_mappings_by_notion_id(session: Session, category_id: str, group_id: str 
         
     result = (
         session.query(AttributesMapping)
-        .join(CategoryAttr, AttributesMapping.category_id == CategoryAttr.id)
-        .join(GroupAttr, AttributesMapping.group_id == GroupAttr.id)
+        .join(CategoryAttr, AttributesMapping.category_id == CategoryAttr.id, isouter=True)
+        .join(GroupAttr, AttributesMapping.group_id == GroupAttr.id, isouter=True)
         .filter(*filters)
-        .first()
     )
-    return result
+    return result.first()
 
 def get_attribute_by_notion_attribute_id(session: Session, attribute_id: int, kind: str) -> Attributes:
     return session.query(Attributes).filter_by(
         notion_attribute_id=attribute_id,
         attribute_kind=kind).first()
 
-def count_mappings_by_parent_id(session: Session, parent_id: int) -> int:
+def count_mappings_by_parent_id(session: Session, parent_id: int | None = None) -> int:
+    filters = []
+    if parent_id is None:
+        filters.append(AttributesMapping.parent_id.is_(None))
+    else:
+        filters.append(AttributesMapping.parent_id == parent_id)
     return (
         session.query(AttributesMapping)
-        .filter(AttributesMapping.parent_id == parent_id)
+        .filter(*filters)
         .count()
     )
+def update_attributes_mapping_tistory_id(session: Session, attributes_mapping: AttributesMapping, tistory_id = int):
+    attributes_mapping.tistory_id = tistory_id
+    session.add(attributes_mapping)
+    session.commit()

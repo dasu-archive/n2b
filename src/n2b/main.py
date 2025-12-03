@@ -8,7 +8,18 @@ import json
 from n2b.tistory.tistory import TistoryBot
 load_dotenv()
 
+test_page_id = os.getenv("NOTION_TEST_PAGE_ID")
+# Notion Attribute 업데이트 
+def test_notion_attribute_update():
+    
+    notion_bot = NotionBot()
+    # 1. attributes 업데이트. TODO: 카테고리 항목 env 로 관리하도록 변경 필요
+    notion_bot.update_attributes(["Category", "Group"])
 
+def test_notion_page_to_html():
+    notion_bot = NotionBot()
+    html = notion_bot.get_page_to_html(page_id=test_page_id)
+    print(html)
 # Tistory 로그인 및 포스팅 테스트
 def test_tistory_login_and_upload():
     with TistoryBot() as bot:
@@ -23,7 +34,7 @@ def test_tistory_category_update():
     notion_bot = NotionBot()
     with TistoryBot() as tistory_bot:
         # 1. 페이지 가져오기
-        page = notion_bot.get_preprocessed_notion_page_info(page_id="")
+        page = notion_bot.get_preprocessed_notion_page_info(page_id=test_page_id)
         
         # 2. 페이지에 설정된 카테고리 그룹 매핑 업데이트 하기
         attribute_mapping = notion_bot.update_attribute_mappings_by_id(category_id=page["category_id"], group_id=page["group_id"])
@@ -50,16 +61,13 @@ def run():
         attribute_mapping = notion_bot.update_attribute_mappings_by_id(category_id=page["category_id"], group_id=page["group_id"])
         
         # 4. tistory 에 카테고리 확인 및 생성 요청
-        if attribute_mapping.tistory_id is None || attribute_mapping.tistory_id == 0:
+        if attribute_mapping.tistory_id is None or attribute_mapping.tistory_id == 0:
             tistory_bot.update_category(attribute_mapping)
         
         # 5. 페이지 to markdown 변환 및 포스팅
-        markdown_content = notion_bot.get_page_to_markdown(page_id=page["id"])
+        markdown_content = notion_bot.get_page_to_html(page_id=page["id"])
         
-        '''
-        TODO : markdown to content 를 하던가 to html 로 바로 하는 방법 찾기
-        '''
-        
+
         # 6. tistory 에 md 업로드
         tistory_bot.upload_post(title=page["title"], content=markdown_content, tag=page["tags"], category_id=attribute_mapping.tistory_id)
         
@@ -67,8 +75,9 @@ def run():
         notion_bot.update_publication_date(page["id"])
 
 if __name__ == "__main__":
-
+    # test_notion_attribute_update()
     test_tistory_category_update()
+    # test_notion_page_to_html()
         
     
 

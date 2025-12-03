@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 from n2b.database.models import AttributesMapping
+from n2b.database.mysql_conf import SessionLocal
+from n2b.database.repository.attribute_repository import count_mappings_by_parent_id, update_attributes_mapping_tistory_id
 
 load_dotenv()
 
@@ -13,6 +15,7 @@ class TistoryBot:
         self.base_url = os.getenv("TISTORY_API_BASE_URL")
         self.access_token = os.getenv("TISTORY_ACCESS_TOKEN")
         self.blog_name = os.getenv("TISTORY_BLOG_NAME")
+        self.db = SessionLocal()
     
     def __enter__(self):
         self.playwright = sync_playwright().start()
@@ -88,11 +91,15 @@ class TistoryBot:
             #     page.wait_for_load_state("networkidle")
             #     page.wait_for_timeout(4000)
             #     print("2단계 인증 완료")
-            self.cookies = self._get_cookies()
             print("로그인 완료")
         else:
             print("이미 로그인되어 있음")
             page.wait_for_timeout(1000)
+        
+        page.goto(f"{self.base_url}/manage/category")
+        
+        self.cookies = self._get_cookies()
+        self._get_cookies_for_requests()
         
     def _get_cookies(self): 
         return  self.page.context.cookies()
@@ -101,9 +108,11 @@ class TistoryBot:
         return ["__gads","__eoi", "IS_TC","TSSESSION","__T_","__T_SECURE","TSMT","_T_ANO"]
     
     def _get_cookies_for_requests(self):
+       
         cookies = self.cookies
         filtered_cookie_headers = self._get_cookie_headers_for_requests()
         cookie_str = "; ".join([f"{cookie['name']}={cookie['value']}" for cookie in cookies if cookie['name'] in filtered_cookie_headers])
+        cookie_str += "; TSMT=0"
         return cookie_str    
      
     def _is_kakako_login_page(self):
@@ -151,7 +160,7 @@ class TistoryBot:
     def update_category(self, attribute_mapping:AttributesMapping):
         
         # 카테고리 업로드 url 
-        url = f"{self.base_url}/manage/post.json"
+        url = f"{self.base_url}/manage/category.json"
         # 공통 헤더 설정
         headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
@@ -165,74 +174,133 @@ class TistoryBot:
         }
         
         parent_mapping = attribute_mapping.parent
-        
         if parent_mapping.tistory_id is None or parent_mapping.tistory_id == 0:
             data = self._create_tistoy_category_body(parent_mapping)
             response = requests.put(url, headers=headers, json=data)
+            label = attribute_mapping.category.notion_attribute_name
+            self._update_attributes_mapping_tistory_id(attribute_mapping.parent, response, label)
             print("[create] Tistory Category", response.status_code)
+            
         if attribute_mapping.tistory_id is None or attribute_mapping.tistory_id == 0:
             data = self._create_tistoy_category_body(attribute_mapping)
             response = requests.put(url, headers=headers, json=data)
+            label = attribute_mapping.category.notion_attribute_name + "/" + attribute_mapping.group.notion_attribute_name
+            self._update_attributes_mapping_tistory_id(attribute_mapping, response, label)
             print("[create] Tistory Category", response.status_code)
             
             
+    # Response 를 받아 text 로 json 반환
+    def _update_attributes_mapping_tistory_id(self,attribute_mapping:AttributesMapping, response, label:str):
+        try:
+            data = json.loads(response.text)
+        except:
+            data = response.text
+        tistory_id = self._find_id_by_label(data=data, label=label)
+        update_attributes_mapping_tistory_id(session=self.db, attributes_mapping=attribute_mapping, tistory_id=tistory_id)
+        
+        
+    # Label 찾기
+    def _find_id_by_label(self, data, label:str):
+        
+        # categoryTree를 재귀 탐색
+        def search_tree(tree_list):
+            for node in tree_list:
+                if node.get("label") == label:
+                    return node.get("id")
+                # children가 있으면 재귀 탐색
+                children = node.get("children", [])
+                if children:
+                    result = search_tree(children)
+                    if result is not None:
+                        return result
+            return None
+
+        # 우선 categoryTree에서 검색
+        result = search_tree(data.get("categoryTree", []))
+        if result is not None:
+            return result
+        
+        
     # 카테고리 체크 항목
     # 1. priority ( 순서 명확해야 함 )
     # 2. parent 
     # 3. depth
     # 4. Category Lable
+    # 5. name
+    # 6. tistory_id
     def _create_tistoy_category_body(self, attribute_mapping:AttributesMapping):
-        # depth : parentID 가 있으면 1, 아니면 2 
-        depth = ( attribute_mapping.parent_id != None or attribute_mapping.parent_id == 0 )  1 : 2 
-        
-        # priority : parentId 의 개수
-        priority = 0
-        # parent : parent의 tistory id 
-        parent = attribute_mapping.parent.tistory_id
-        
-        # categoryLabel : [Category]/[Group]
-        categoryLabel = 
-        data = {
-                {
+        is_parent = attribute_mapping.parent_id == None 
+  
+        # Category 
+        if is_parent:
+            # tistory_id  어차피 0 
+            parent_tistory_id = 0
+            
+            depth = 1
+            # categoryLabel : [Category]
+            categoryLabel = attribute_mapping.category.notion_attribute_name
+            # priority : category 개수
+            priority = count_mappings_by_parent_id(session=self.db)
+            # name
+            name = attribute_mapping.category.notion_attribute_name
+            
+        # Group 
+        else:
+            
+            # parent : parent의 tistory id , default = 0 
+            parent_tistory_id =  attribute_mapping.parent.tistory_id
+            
+            depth = 2
+            # categoryLabel : [Category]/[Group]
+            categoryLabel = attribute_mapping.category.notion_attribute_name + "/" + attribute_mapping.group.notion_attribute_name
+            # priority : group 개수 
+            priority = count_mappings_by_parent_id(session=self.db, parent_id=attribute_mapping.parent_id)
+            # name
+            name = attribute_mapping.group.notion_attribute_name
+            
+
+            
+        data =  {
                     "rootLabel": "분류 전체보기",
                     "delete": [],
                     "append": [
                         {
                             "id": -1,
-                            "name": "7777",
+                            "name": name,
                             "children": [],
                             "depth": depth,
                             "opened": True,
                             "priority": priority,
                             "visibility": 20,
-                            "parent": parent, # 없을 시 0
+                            "parent": parent_tistory_id, # 없을 시 0
                             "viewChannel": "401", # IT,인터넷 고정
                             "entries": 0,
                             "categoryInfo": {},
                             "isNew": True,
                             "updatedData": True,
-                            "label": CategoryLabel # [Category]/[Group] 형식 
+                            "label": categoryLabel # [Category]/[Group] 형식 
                         }
                     ],
                     "update": [
                         {
                             "id": -1,
-                            "name": "7777",
+                            "name": name,
                             "children": [],
-                            "depth": 2,
-                            "opened": true,
-                            "priority": 1,
+                            "depth": depth,
+                            "opened": True,
+                            "priority": priority,
                             "visibility": 20,
-                            "parent": 1209472,
-                            "viewChannel": null,
+                            "parent": parent_tistory_id, # 없을 시 0
+                            "viewChannel": "401", # IT,인터넷 고정
                             "entries": 0,
                             "categoryInfo": {},
-                            "isNew": true,
-                            "updatedData": true,
-                            "label": "카테고리 5/7777"
+                            "isNew": True,
+                            "updatedData": True,
+                            "label": categoryLabel # [Category]/[Group] 형식 
                         }
                     ]
                 }
-            }
+            
+        return data
             
                 
