@@ -44,7 +44,17 @@ def test_tistory_category_update():
         
         # 4. 카테고리 업데이트
         tistory_bot.update_category(attribute_mapping=attribute_mapping)
+# Tistory 카테고리 테스트
+def test_tistory_category_update():
+    notion_bot = NotionBot()
+    with TistoryBot() as tistory_bot:
 
+        
+        # 3. 티스토리 로그인
+        tistory_bot.do_login()
+        
+        # 4. 카테고리 업데이트
+        print(tistory_bot.get_tistory_category_list())
 # 메인 기능 
 def run():
     notion_bot  = NotionBot()
@@ -55,8 +65,10 @@ def run():
     # 2. 페이지 리스트 가져오기
     pages = notion_bot.get_preprocessed_notion_pages_info(page_size=15)
     
+    
     with TistoryBot() as tistory_bot:
         tistory_bot.do_login()
+        tistory_categories = tistory_bot.get_tistory_category_list()
         for page in pages:
 
             # 3. 페이지의 매핑 확인

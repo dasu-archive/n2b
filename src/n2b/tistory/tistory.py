@@ -157,7 +157,7 @@ class TistoryBot:
     
     # 카테고리를 넣은후 -> 받은 카테고리 번호를 가져와 -> 내꺼 db에 업데이트 시키기
     # AttributesMapping의 parent 부터 확인
-    def update_category(self, attribute_mapping:AttributesMapping):
+    def update_category(self, attribute_mapping:AttributesMapping, tistory_categories:json):
         
         # 카테고리 업로드 url 
         url = f"{self.base_url}/manage/category.json"
@@ -221,6 +221,27 @@ class TistoryBot:
             return result
         
         
+    # 카테고리 가져오기
+    def get_tistory_category_list(self):
+        
+        # 카테고리 업로드 url 
+        url = f"{self.base_url}/manage/category.json"
+        # 공통 헤더 설정
+        headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Accept-Encoding": "gzip, deflate, br, zstd",
+                "Referer": f"{self.base_url}/manage/category",
+                "Origin": f"{self.base_url}",
+                "Content-Type": "application/json",
+                "Cookie": self._get_cookies_for_requests()
+        }
+        response = requests.get(url, headers=headers)
+        data = json.loads(response.text)
+        return data["categories"]
+        
+    
     # 카테고리 체크 항목
     # 1. priority ( 순서 명확해야 함 )
     # 2. parent 
