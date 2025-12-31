@@ -36,7 +36,7 @@ class notion_api:
             "filter": filter or {},
             "sorts" : sorts or  [{
                 "property": "시행날짜",
-                "direction": "descending"
+                "direction": "ascending"
             }]
         }
         response = requests.post(url, headers=self.headers, json=payload)

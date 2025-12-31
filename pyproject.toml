@@ -39,3 +39,5 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
 
+[tool.poetry.scripts]
+n2b = "src.n2b.main:run"
