@@ -1,0 +1,284 @@
+import json
+import re
+from notion_client import Client
+from notion_to_md import NotionToMarkdown
+
+import base64
+import os
+from datetime import datetime
+import pytz
+import requests
+
+from n2b.database.mysql_conf import SessionLocal
+from n2b.database.models import Attributes, AttributesMapping, init_tables
+from n2b.notion.notion_api import notion_api
+from n2b.database.repository.attribute_repository import get_mappings_by_notion_id, get_attribute_by_notion_attribute_id
+
+import markdown as md_lib
+class NotionBot:
+    def __init__(self):
+        self.client = Client(auth=os.getenv("NOTION_API_KEY"))
+        
+        self.n2m = NotionToMarkdown(self.client)
+        self.notion_api = notion_api()
+        init_tables()
+        self.db = SessionLocal()
+
+    '''
+    Notion 페이지 관련 기능
+    '''
+    # Notion 페이지 정보 불러오기
+    # return: dict
+    def get_notion_page_info(self, page_id: str):
+        return self.notion_api.get_page(page_id)
+    
+    # Notion 정제된 페이지 정보 불러오기
+    # return dict
+    def get_preprocessed_notion_page_info(self, page_id: str):
+        return self._preprocess_notion_page(self.get_notion_page_info(page_id=page_id))
+    
+    # Notion 정제된 페이지 리스트 불러오기
+    # return: list
+    def get_preprocessed_notion_pages_info(self, database_id: str = None, page_size: int = 15, csutom_filter: dict = None ): # type: ignore
+        notion_pages = self.get_notion_pages_info(database_id, page_size, csutom_filter)
+        preprocessed_notion_pages = []
+        for page in notion_pages["results"]:
+            preprocessed_notion_pages.append(self._preprocess_notion_page(page))
+        return preprocessed_notion_pages
+        
+    def _preprocess_notion_page(self, page: dict):
+        # 비어있을 수 있으므로
+        tags_data = page["properties"]["Tag"]["multi_select"]
+        return {
+            "id": page["id"],
+            "title": page["properties"]["이름"]["title"][0]["plain_text"],
+            "type": page["properties"]["구분"]["select"]["name"],
+            "category_id": page["properties"]["Category"]["select"]["id"],
+            "category": page["properties"]["Category"]["select"]["name"],
+            "group_id": page["properties"]["Group"]["select"]["id"],
+            "group": page["properties"]["Group"]["select"]["name"],
+            "tags": [value["name"] for value in tags_data] if tags_data else []
+        }
+        
+    # Notion 페이지 리스트 불러오기
+    def get_notion_pages_info(self, database_id: str = None, page_size: int = 15, csutom_filter: dict = None   ): # type: ignore
+        filter = csutom_filter or {
+            "and": [
+                {
+                    "property": "Status",
+                    "status": { "equals": "완료" }
+                },
+                {
+                    "or": [
+                        {
+                            "property": "구분",
+                            "select": { "equals": "DeveloperGoal" }
+                        },
+                        {
+                            "property": "구분",
+                            "select": { "equals": "CodingTest" }
+                        },
+                        {
+                            "property": "구분",
+                            "select": { "equals": "Project" }
+                        },
+                        {
+                            "property": "구분",
+                            "select": { "equals": "Archive" }
+                        }
+                    ]
+                },
+                {
+                    "property": "발행날짜",
+                    "date": {
+                        "is_empty": True
+                    }
+                    
+                }
+            ]
+        }
+        return self.notion_api.get_pages(filter=filter)
+    
+
+    # Notion 페이지를 HTML로 변환
+    def get_page_to_html(self, page_id):
+        notion_markdown = self.get_page_to_markdown(page_id=page_id)
+
+        html = md_lib.markdown(notion_markdown, extensions=['fenced_code', 'tables'])
+        return html
+
+    # Notion 페이지를 Markdown으로 변환
+    def get_page_to_markdown(self, page_id: str):
+        notion_to_markdown = self.n2m.to_markdown_string(
+            self.n2m.page_to_markdown(page_id)
+        ).get("parent")
+        converted_markdown = self._convert_img_url_to_base64_in_markdown(notion_to_markdown)
+        return converted_markdown
+
+    # Markdown의 이미지 URL을 Base64로 변환
+    def _convert_img_url_to_base64_in_markdown(self, markdown_text: str):
+        # 이미지 마크다운 패턴: ![Alt](URL)
+        pattern = r'!\[(.*?)\]\((https?://[^\s]+)\)'
+        
+        def replace_img(match):
+            alt_text = match.group(1)
+            url = match.group(2)
+            try:
+                # 이미지 다운로드
+                response = requests.get(url)
+                response.raise_for_status()
+                img_data = response.content
+                # Base64 인코딩
+                b64_str = base64.b64encode(img_data).decode('utf-8')
+                # MIME 타입 추정
+                if url.lower().endswith(".png"):
+                    mime = "image/png"
+                elif url.lower().endswith(".jpg") or url.lower().endswith(".jpeg"):
+                    mime = "image/jpeg"
+                elif url.lower().endswith(".gif"):
+                    mime = "image/gif"
+                else:
+                    mime = "application/octet-stream"
+                # Base64 img 태그로 변환
+                return f'![{alt_text}](data:{mime};base64,{b64_str})'
+            except Exception as e:
+                print(f"[Warning] Failed to convert image {url}: {e}")
+                return match.group(0)  # 실패 시 원래 Markdown 유지
+
+        # 모든 이미지 변환
+        converted = re.sub(pattern, replace_img, markdown_text)
+        return converted
+    
+    def save_markdown_to_file(self, page_id: str, filename: str):
+        """마크다운 문자열을 파일로 저장"""
+        
+        # 1. 마크다운 내용 가져오기
+        markdown_content = self.get_page_to_markdown(page_id)
+        
+        # 2. 파일 저장 경로 및 이름 설정
+        output_dir = "output_md"
+        # 디렉토리가 없으면 생성
+        os.makedirs(output_dir, exist_ok=True) 
+        
+        file_path = os.path.join(output_dir, filename)
+        
+        # 3. 파일 쓰기 (UTF-8 인코딩 사용 권장)
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(markdown_content)
+            print(f"✅ 마크다운 파일이 성공적으로 저장되었습니다: {file_path}")
+        except Exception as e:
+            print(f"❌ 파일 저장 중 오류 발생: {e}")
+            
+            
+    
+            
+    def update_publication_date(self, page_id: str):
+        kst = pytz.timezone("Asia/Seoul")
+        now_kst = datetime.now(kst)
+
+        self.notion_api.update_page_properties(
+            page_id,
+            {
+                "발행날짜": {
+                    "date": {
+                        "start": now_kst.isoformat()
+                    }
+                }
+            }
+        )
+        return True
+    '''
+    Notion 속성 관련 기능
+    '''
+    # 속성 전체 불러오기
+    # return: Dict[category:str, List[Attribute]]
+    def get_attributes(self):
+        attributes = self.db.query(Attributes).all()
+        attributes_seperated = {"Category": [], "Group": []}
+        for attr in attributes:
+            attributes_seperated[attr.attribute_kind].append(attr)
+        return attributes_seperated
+    
+    # 해당 카테고리 불러오기
+    # return: List[Attribute]
+    def get_attributes(self, category: str):
+        return self.db.query(Attributes).filter_by(attribute_kind=category).all()
+    
+    # 해당 카테고리 및 이름으로 속성 불러오기
+    # return: Attribute
+    def get_attribute_by_name(self, category: str, name: str):
+        return self.db.query(Attributes).filter_by(
+            attribute_kind=category,
+            notion_attribute_name=name
+        ).first()
+    
+    # Notion에서 속성 불러와서 데이터베이스에 업데이트
+    # return: bool
+    def update_attributes(self, categories =  ["Category", "Group"]):
+        data_sources = self.notion_api.get_notion_data_sources()
+
+        for category in categories:
+           attribute_value_list =  data_sources["properties"][category]["select"]["options"]
+           self.update_attribute_in_database(attribute_value_list, category)
+
+        return True
+    
+    # List 데이터 정제 및 데이터베이스 업데이트
+    # return: bool
+    def update_attribute_in_database(self, attribute_value_list, category):
+        for value in attribute_value_list:
+            # UPSERT 구현: MySQL에서는 ON DUPLICATE KEY 가능, SQLAlchemy는 merge 사용
+            attr = self.db.query(Attributes).filter_by(notion_attribute_id=value["id"]).first()
+            if attr:
+                attr.notion_attribute_name = value["name"]
+                attr.attribute_kind = category
+            else:
+                attr = Attributes(
+                    notion_attribute_id=value["id"],
+                    notion_attribute_name=value["name"],
+                    attribute_kind=category
+                )
+                self.db.add(attr)
+        self.db.commit()
+        return True
+
+        
+    # 속성 매핑 업데이트
+    # return: AttributesMapping
+    def update_attribute_mappings_by_id(self, category_id: str, group_id: str, tistory_id: int = 0)->AttributesMapping:
+        # 부모가 먼저 아이디가 존재하는지 확인 ( parent = none, gruop = 0)
+        category_mapping = get_mappings_by_notion_id(session=self.db, category_id=category_id, parent_id=None)
+        category = get_attribute_by_notion_attribute_id(session=self.db, attribute_id=category_id, kind="Category")
+        group = get_attribute_by_notion_attribute_id(session=self.db, attribute_id=group_id, kind="Group")
+        # 부모가 없다면 둘다 생성
+        if not category_mapping:
+            category_mapping = AttributesMapping(category_id=category.id, tistory_id=0)
+            self.db.add(category_mapping)
+            self.db.commit()
+            self.db.refresh(category_mapping)
+            
+            group_mapping = AttributesMapping(category_id=category.id, group_id=group.id, parent_id=category_mapping.id)
+            self.db.add(group_mapping)
+            self.db.commit()
+            self.db.refresh(group_mapping)
+            print("[create] Category : " + category_id )
+            
+        # 부모가 있다면 자식확인 후 생성
+        else:
+            group_mapping = get_mappings_by_notion_id(session=self.db, category_id=category_id, group_id=group_id, parent_id=category_mapping.id)
+            
+            # 자식이 없음. 생성하기
+            if not group_mapping:
+                group_mapping = AttributesMapping(category_id=category.id, group_id=group.id, parent_id=category_mapping.id)
+                self.db.add(group_mapping)
+                self.db.commit()
+                self.db.refresh(group_mapping)
+                print("[create]  Category : " + category_id + " , Group " + group_id)
+            else: 
+                print("[exist] Category : " + category_id + " , Group " + group_id)
+            
+            
+        
+        return group_mapping
+        
