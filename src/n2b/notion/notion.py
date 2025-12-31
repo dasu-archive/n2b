@@ -39,7 +39,7 @@ class NotionBot:
     
     # Notion 정제된 페이지 리스트 불러오기
     # return: list
-    def get_preprocessed_notion_pages_info(self, database_id: str = None, page_size: int = 15, csutom_filter: dict = None ):
+    def get_preprocessed_notion_pages_info(self, database_id: str = None, page_size: int = 15, csutom_filter: dict = None ): # type: ignore
         notion_pages = self.get_notion_pages_info(database_id, page_size, csutom_filter)
         preprocessed_notion_pages = []
         for page in notion_pages["results"]:
@@ -48,11 +48,11 @@ class NotionBot:
         
     def _preprocess_notion_page(self, page: dict):
         # 비어있을 수 있으므로
-        tags_data = page["properties"]["태그"]["multi_select"]
+        tags_data = page["properties"]["Tag"]["multi_select"]
         return {
             "id": page["id"],
             "title": page["properties"]["이름"]["title"][0]["plain_text"],
-            "type": page["properties"]["Type"]["select"]["name"],
+            "type": page["properties"]["구분"]["select"]["name"],
             "category_id": page["properties"]["Category"]["select"]["id"],
             "category": page["properties"]["Category"]["select"]["name"],
             "group_id": page["properties"]["Group"]["select"]["id"],
@@ -61,7 +61,7 @@ class NotionBot:
         }
         
     # Notion 페이지 리스트 불러오기
-    def get_notion_pages_info(self, database_id: str = None, page_size: int = 15, csutom_filter: dict = None   ):
+    def get_notion_pages_info(self, database_id: str = None, page_size: int = 15, csutom_filter: dict = None   ): # type: ignore
         filter = csutom_filter or {
             "and": [
                 {
@@ -71,16 +71,20 @@ class NotionBot:
                 {
                     "or": [
                         {
-                            "property": "Type",
+                            "property": "구분",
                             "select": { "equals": "DeveloperGoal" }
                         },
                         {
-                            "property": "Type",
+                            "property": "구분",
                             "select": { "equals": "CodingTest" }
                         },
                         {
-                            "property": "Type",
+                            "property": "구분",
                             "select": { "equals": "Project" }
+                        },
+                        {
+                            "property": "구분",
+                            "select": { "equals": "Archive" }
                         }
                     ]
                 },

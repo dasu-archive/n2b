@@ -26,7 +26,6 @@ def test_notion_page_to_html():
 # Tistory 로그인 및 포스팅 테스트
 def test_tistory_login_and_upload():
     tistory_bot = TistoryBot()
-    tistory_bot.do_login()
     tistory_bot.upload_post(
         title="테스트 업로드 제목",
         content="<p>테스트 업로드 내용<p>\n",
@@ -43,7 +42,6 @@ def test_tistory_category_update():
     # 2. 페이지에 설정된 카테고리 그룹 매핑 업데이트 하기
     attribute_mapping = notion_bot.update_attribute_mappings_by_id(category_id=page["category_id"], group_id=page["group_id"])
     # 3. 티스토리 로그인
-    tistory_bot.do_login()
     # 4. 카테고리 업데이트
     tistory_bot.update_category(attribute_mapping=attribute_mapping)
         

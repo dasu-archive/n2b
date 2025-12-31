@@ -29,7 +29,7 @@ class TistoryBot:
             "slogan":title,
             "visibility":20,
             "category": category_id, # integer
-            "tag": " ".join(tag), # String  "111 222 333"
+            "tag": ",".join(tag), # String  "111 222 333"
             "published":1,
             "password":"test1234",
             "uselessMarginForEntry":1,
@@ -48,7 +48,7 @@ class TistoryBot:
     def update_category(self, attribute_mapping:AttributesMapping, tistory_categories:json):
         # 카테고리를 넣은후 -> 받은 카테고리 번호를 가져와 -> 내꺼 db에 업데이트 시키기
         parent_mapping = attribute_mapping.parent
-        self._check_and_update_category(parent_mapping, attribute_mapping, tistory_categories, is_child=False)
+        self._check_and_update_category(parent_mapping,tistory_categories, is_child=False)
         self._check_and_update_category(attribute_mapping, tistory_categories, is_child=True)
 
             
@@ -57,7 +57,7 @@ class TistoryBot:
     def _check_and_update_category(self, attribute_mapping:AttributesMapping, tistory_categories:json, is_child:bool=True):
         if attribute_mapping.tistory_id is None or attribute_mapping.tistory_id == 0:
             # 카테고리 tistory_id 업데이트
-            label = attribute_mapping.category.notion_attribute_name + ("/" + attribute_mapping.group.notion_attribute_name) if is_child  else ""
+            label = attribute_mapping.category.notion_attribute_name + (("/" + attribute_mapping.group.notion_attribute_name) if is_child  else "")
             tistory_id = self._find_existing_category_in_now_tistory(label=label, tistory_categories=tistory_categories, is_child=is_child)
             # 현재 카테고리가 tistory 에 없을때 생성 후 업데이트 
             if  tistory_id is None:
